@@ -32,4 +32,4 @@ def add_student(student: StudentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_student)
 
-    return new_student
+    return new_student   # ⚠️ sadece bunu döndür!
