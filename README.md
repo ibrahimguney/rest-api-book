@@ -1,2 +1,8 @@
-# rest-api-book
-REST API, Docker ve GitHub ile uygulamalı kitap projesi
+# REST API Book
+
+REST API, Docker, PostgreSQL ve GitHub ile uygulamalı kitap projesi.
+
+## Run
+
+```bash
+docker compose up --build
