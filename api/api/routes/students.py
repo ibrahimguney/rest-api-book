@@ -18,6 +18,7 @@ def get_students(db: Session = Depends(get_db)):
 
 @router.post("/")
 def add_student(student: dict, db: Session = Depends(get_db)):
+   
     new_student = Student(
         name=student["name"],
         department=student["department"]
