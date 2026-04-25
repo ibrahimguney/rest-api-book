@@ -1,25 +1,4 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from api.database import SessionLocal
-from api.models import Student
 from api.schemas import StudentCreate
-
-router = APIRouter()
-
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@router.get("/")
-def get_students(db: Session = Depends(get_db)):
-    return db.query(Student).all()
-
 
 @router.post("/")
 def add_student(student: StudentCreate, db: Session = Depends(get_db)):
@@ -32,4 +11,4 @@ def add_student(student: StudentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_student)
 
-    return new_student   # ⚠️ sadece bunu döndür!
+    return new_student
