@@ -1,14 +1,446 @@
-\documentclass{book}
+\documentclass[11pt]{book}
 
-\title{REST API and Modern Web Services}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{titlesec}
+
+% --- Kod listingi stili ---------------------------------------------------
+\definecolor{codebg}{RGB}{245,245,245}
+\definecolor{codekey}{RGB}{0,102,153}
+\definecolor{codestr}{RGB}{163,21,21}
+\definecolor{codecom}{RGB}{0,128,0}
+
+\lstdefinestyle{base}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{codekey}\bfseries,
+  stringstyle=\color{codestr},
+  commentstyle=\color{codecom}\itshape,
+  breaklines=true,
+  showstringspaces=false,
+  frame=single,
+  rulecolor=\color{black!20},
+  numbers=left,
+  numberstyle=\tiny\color{black!50},
+  numbersep=8pt,
+  tabsize=2,
+}
+\lstdefinelanguage{yaml}{
+  keywords={services,image,environment,ports,depends_on,volumes,build},
+  sensitive=true,
+  comment=[l]{\#},
+  string=[s]{'}{'},
+}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black,
+  citecolor=blue!60!black,
+}
+
+\title{REST API and Modern Web Services\\
+\large A Practical Companion to the \texttt{rest-api-book} Repository}
 \author{İbrahim Güney}
+\date{\today}
 
 \begin{document}
 
+\frontmatter
 \maketitle
 
-\chapter{Introduction}
+\tableofcontents
 
-This book is integrated with a live GitHub repository.
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+This book is the written companion to a live GitHub repository
+(\texttt{rest-api-book}) that implements a small but realistic web service:
+a FastAPI application backed by PostgreSQL, protected by JWT-based
+authentication, packaged with Docker, and validated by an automated test
+suite. Every chapter ends with pointers to the corresponding files in the
+repository so that what is described in prose can be inspected, executed,
+and modified.
+
+\mainmatter
+
+% =========================================================================
+\chapter{Introduction}
+\label{ch:intro}
+
+Modern applications rarely live in isolation. A mobile client, a web
+front-end, and a third-party integration may all need to talk to the same
+core data. The most widely deployed pattern for that conversation is the
+\emph{REST API}, an architectural style that uses HTTP verbs, resource
+URIs, and stateless requests to expose application functionality.
+
+\section{Goals of the Book}
+By the end of this book, the reader should be able to:
+\begin{itemize}[leftmargin=*]
+  \item explain the constraints of REST and apply them to API design;
+  \item build a typed Python web service with FastAPI;
+  \item persist data in PostgreSQL through SQLAlchemy;
+  \item implement password hashing and JWT-based authentication;
+  \item containerize the service with Docker and Docker Compose;
+  \item write meaningful tests with \texttt{pytest} and FastAPI's
+        \texttt{TestClient};
+  \item maintain the project on GitHub with a sustainable workflow.
+\end{itemize}
+
+\section{Repository Map}
+The companion repository is organized as follows:
+\begin{lstlisting}[style=base]
+rest-api-book/
+├── api/
+│   ├── auth.py          # JWT, password hashing, current-user dependency
+│   ├── database.py      # SQLAlchemy engine + session
+│   ├── main.py          # FastAPI app entry point
+│   ├── models.py        # ORM models
+│   ├── schemas.py       # Pydantic request/response schemas
+│   └── routes/
+│       ├── students.py  # /students CRUD
+│       └── users.py     # /users register, login, me
+├── tests/               # pytest suite
+├── book/main.tex        # this book
+├── Dockerfile           # API image
+├── docker-compose.yml   # API + PostgreSQL
+└── requirements.txt
+\end{lstlisting}
+
+% =========================================================================
+\chapter{REST Fundamentals}
+\label{ch:rest}
+
+REST (\emph{Representational State Transfer}) was introduced by Roy
+Fielding in his 2000 doctoral dissertation. It is not a protocol but a set
+of architectural constraints that, when satisfied, give a distributed
+system the properties of scalability, evolvability, and visibility.
+
+\section{The Six Constraints}
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Client--server.} Clear separation of concerns between the
+        user interface and data storage.
+  \item \textbf{Stateless.} Each request carries everything the server
+        needs to process it; the server keeps no client session.
+  \item \textbf{Cacheable.} Responses must declare whether they are
+        cacheable, so that intermediaries can short-circuit traffic.
+  \item \textbf{Uniform interface.} Resources are identified by URIs,
+        manipulated through representations, and described by
+        self-descriptive messages.
+  \item \textbf{Layered system.} A client cannot tell whether it is
+        talking to the origin server or an intermediary.
+  \item \textbf{Code on demand} (optional). The server may extend client
+        functionality by transferring executable code.
+\end{enumerate}
+
+\section{HTTP Verbs as Resource Operations}
+\begin{tabular}{l l l}
+\textbf{Verb} & \textbf{Meaning} & \textbf{Idempotent?} \\\hline
+GET    & Retrieve a representation        & Yes \\
+POST   & Create a new resource            & No  \\
+PUT    & Replace a resource               & Yes \\
+PATCH  & Partially update a resource      & No  \\
+DELETE & Remove a resource                & Yes \\
+\end{tabular}
+
+\section{Status Codes That Matter}
+A REST API communicates outcomes with status codes. The minimum viable
+vocabulary is:
+\textbf{200 OK}, \textbf{201 Created}, \textbf{204 No Content},
+\textbf{400 Bad Request}, \textbf{401 Unauthorized},
+\textbf{403 Forbidden}, \textbf{404 Not Found},
+\textbf{409 Conflict}, \textbf{422 Unprocessable Entity},
+\textbf{500 Internal Server Error}.
+
+\section{Designing Resources}
+A good URL describes a \emph{noun}, not a verb:
+\texttt{/students/42} is preferable to \texttt{/getStudentById?id=42}.
+Nested resources express containment
+(\texttt{/students/42/courses}), while query parameters express
+filters and pagination (\texttt{/students?department=cs\&limit=20}).
+
+% =========================================================================
+\chapter{FastAPI in Practice}
+\label{ch:fastapi}
+
+FastAPI is a modern Python framework that builds on Starlette for the web
+layer and Pydantic for data validation. Its key promise is that the same
+type hints that make Python code self-documenting also generate request
+validation, response serialization, and an OpenAPI schema.
+
+\section{The Application Object}
+The repository's entry point is \texttt{api/main.py}:
+\begin{lstlisting}[style=base, language=Python]
+from fastapi import FastAPI
+from api.database import Base, engine
+from api import models  # noqa: F401
+from api.routes import students, users
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(title="REST API Book")
+app.include_router(students.router, prefix="/students", tags=["Students"])
+app.include_router(users.router,    prefix="/users",    tags=["Users"])
+\end{lstlisting}
+
+\section{Routers, Dependencies, and Tags}
+\texttt{APIRouter} groups related endpoints. The \texttt{Depends()} marker
+expresses the dependencies of an endpoint --- a database session, the
+current user, a query parameter --- and FastAPI resolves them on every
+request. Tags drive the grouping that the auto-generated documentation
+displays at \texttt{/docs}.
+
+\section{Pydantic Schemas}
+Request and response shapes live in \texttt{api/schemas.py}. By providing
+both an \texttt{StudentCreate} (input) and a \texttt{StudentRead} (output)
+class we keep the persistence layer decoupled from what the API exposes.
+The \texttt{model\_config = ConfigDict(from\_attributes=True)} line tells
+Pydantic that it can build a response straight from a SQLAlchemy ORM
+object.
+
+\section{Automatic OpenAPI}
+Once the application is running, the URL \texttt{/openapi.json} returns a
+machine-readable description of every endpoint, and \texttt{/docs} renders
+the interactive Swagger UI. Clients in any language can be generated from
+that schema.
+
+% =========================================================================
+\chapter{PostgreSQL and SQLAlchemy}
+\label{ch:db}
+
+PostgreSQL is the project's database of record. SQLAlchemy provides two
+layers: a low-level \emph{Core} (SQL expression language) and an
+\emph{ORM} that maps Python classes to tables. The repository uses the
+ORM.
+
+\section{Engine and Session}
+The engine is a connection pool with dialect awareness. Sessions are
+short-lived units of work obtained from a session factory:
+\begin{lstlisting}[style=base, language=Python]
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://admin:password@db:5432/university",
+)
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+\end{lstlisting}
+
+\section{Declarative Models}
+Each model inherits from \texttt{Base} and declares its columns:
+\begin{lstlisting}[style=base, language=Python]
+class Student(Base):
+    __tablename__ = "students"
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String, nullable=False)
+    department = Column(String, nullable=False)
+\end{lstlisting}
+
+\section{The \texttt{get\_db} Dependency}
+Endpoints obtain a session through a generator-based dependency:
+\begin{lstlisting}[style=base, language=Python]
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+\end{lstlisting}
+This pattern guarantees the session is closed even if the endpoint
+raises.
+
+\section{Migrations}
+For a teaching project we rely on
+\texttt{Base.metadata.create\_all()} at startup. Real systems should
+manage schema changes with a tool such as Alembic.
+
+% =========================================================================
+\chapter{Authentication with JWT}
+\label{ch:auth}
+
+Authentication answers \emph{who is calling}; authorization answers
+\emph{are they allowed}. The repository implements stateless
+authentication with JSON Web Tokens.
+
+\section{Hashing Passwords}
+Plain passwords are never stored. \texttt{passlib} with the
+\texttt{bcrypt} backend computes a salted hash:
+\begin{lstlisting}[style=base, language=Python]
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def hash_password(p):    return pwd_context.hash(p)
+def verify_password(p,h): return pwd_context.verify(p, h)
+\end{lstlisting}
+
+\section{Issuing a Token}
+On a successful login, the server signs a JWT that carries the user's
+email as the \texttt{sub} claim:
+\begin{lstlisting}[style=base, language=Python]
+expire = datetime.now(timezone.utc) + timedelta(minutes=30)
+payload = {"sub": user.email, "exp": expire}
+token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+\end{lstlisting}
+
+\section{Verifying on Each Request}
+Protected endpoints depend on \texttt{get\_current\_user}, which decodes
+the bearer token and loads the matching user from the database:
+\begin{lstlisting}[style=base, language=Python]
+def get_current_user(token: str = Depends(oauth2_scheme),
+                     db: Session = Depends(get_db)) -> User:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email = payload.get("sub")
+    except JWTError:
+        raise HTTPException(401, "Could not validate credentials")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(401, "Could not validate credentials")
+    return user
+\end{lstlisting}
+Any route that adds \texttt{\_: User = Depends(get\_current\_user)} to its
+signature is automatically protected.
+
+\section{Operational Notes}
+The signing key is read from \texttt{SECRET\_KEY}. In development the
+default value is fine; in production it \emph{must} be supplied through
+the environment and rotated on suspicion of compromise.
+
+% =========================================================================
+\chapter{Containerization with Docker}
+\label{ch:docker}
+
+\section{The API Image}
+\texttt{Dockerfile} builds a single-purpose image based on the official
+\texttt{python:3.11} runtime:
+\begin{lstlisting}[style=base]
+FROM python:3.11
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY . .
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+\end{lstlisting}
+
+\section{Compose Topology}
+\texttt{docker-compose.yml} wires the API to a PostgreSQL container and
+declares a named volume so that data survives a restart:
+\begin{lstlisting}[style=base, language=yaml]
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      DATABASE_URL: postgresql://admin:password@db:5432/university
+      SECRET_KEY:   ${SECRET_KEY:-change-this-secret-key}
+    depends_on: [db]
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER:     admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB:       university
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+volumes:
+  postgres_data:
+\end{lstlisting}
+
+\section{Running the Stack}
+A single command brings everything up:
+\begin{lstlisting}[style=base]
+docker compose up --build
+\end{lstlisting}
+The API is then available at \url{http://localhost:8000} and the
+documentation at \url{http://localhost:8000/docs}.
+
+% =========================================================================
+\chapter{Testing}
+\label{ch:tests}
+
+A REST API without tests is a contract whose terms can change silently.
+The repository uses \texttt{pytest} and FastAPI's \texttt{TestClient},
+which speaks to the application in-process without needing a real HTTP
+server.
+
+\section{Isolating the Test Database}
+\texttt{tests/conftest.py} sets \texttt{DATABASE\_URL} to a local SQLite
+file \emph{before} the application is imported. SQLAlchemy then builds a
+SQLite engine, and tables are recreated for each test. The production
+PostgreSQL configuration is untouched.
+
+\section{Fixtures}
+Two fixtures cover most needs:
+\begin{itemize}[leftmargin=*]
+  \item \texttt{client} returns a \texttt{TestClient} bound to the app;
+  \item \texttt{auth\_headers} registers a user, logs in, and returns the
+        \texttt{Authorization} header with the resulting bearer token.
+\end{itemize}
+
+\section{Sample Test}
+\begin{lstlisting}[style=base, language=Python]
+def test_create_student_with_auth(client, auth_headers):
+    resp = client.post(
+        "/students/",
+        json={"name": "Ada Lovelace", "department": "Math"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["name"] == "Ada Lovelace"
+\end{lstlisting}
+
+\section{What to Test}
+A pragmatic checklist: each endpoint's happy path, each authentication
+boundary, validation on input edge cases, and at least one negative case
+per error branch (\texttt{401}, \texttt{404}, \texttt{422}).
+
+% =========================================================================
+\chapter{GitHub Workflow}
+\label{ch:github}
+
+The repository ships with a single \texttt{main} branch. New work is
+done on a feature branch:
+\begin{lstlisting}[style=base]
+git checkout -b feature/<short-name>
+# ... edits ...
+git add -A && git commit -m "feat: <imperative summary>"
+git push -u origin feature/<short-name>
+\end{lstlisting}
+A pull request describes \emph{why} the change exists, not just what it
+does. Reviews focus on correctness, naming, and the test that pins the
+behavior in place.
+
+\section{Continuous Integration (Optional)}
+A minimal GitHub Actions workflow can run the test suite on every push.
+The job installs the requirements, exports a SQLite \texttt{DATABASE\_URL},
+and invokes \texttt{pytest -q}.
+
+\section{Releases}
+Tag releases with semantic versions (\texttt{v1.0.0}). The container image
+can be built and pushed from the same workflow on tags only.
+
+% =========================================================================
+\chapter{Conclusion and Next Steps}
+\label{ch:next}
+
+The repository is intentionally small, but it covers the moving parts of
+a production-grade Python web service. Reasonable next steps include:
+\begin{itemize}[leftmargin=*]
+  \item replacing \texttt{create\_all} with Alembic migrations;
+  \item adding role-based authorization to the JWT payload;
+  \item adding rate limiting and structured logging;
+  \item shipping a CI pipeline that builds, tests, and publishes images;
+  \item exposing more domain resources (courses, enrollments, grades).
+\end{itemize}
+
+The companion repository will continue to evolve, and so should this
+book. The shortest distance between an idea and a running endpoint is
+still a pull request.
+
+\backmatter
 
 \end{document}

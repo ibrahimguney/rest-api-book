@@ -1,30 +1,50 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-class StudentCreate(BaseModel):
-    name: str
-    department: str
 
-class StudentResponse(BaseModel):
+# -------------------------
+# STUDENT
+# -------------------------
+
+class StudentBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    department: str = Field(..., min_length=1, max_length=120)
+
+
+class StudentCreate(StudentBase):
+    pass
+
+
+class StudentResponse(StudentBase):
     id: int
-    name: str
-    department: str
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -------------------------
+# USER
+# -------------------------
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=6, max_length=128)
+
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -------------------------
+# TOKEN
+# -------------------------
 
 class TokenResponse(BaseModel):
     access_token: str
-    token_type: str
+    token_type: str = "bearer"

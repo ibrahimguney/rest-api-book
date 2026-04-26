@@ -1,4 +1,42 @@
-.env
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
 .pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# Test artifacts
+tests/_test.db
+*.sqlite
+*.sqlite3
+*.db
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# LaTeX build artifacts
+book/*.aux
+book/*.log
+book/*.out
+book/*.toc
+book/*.fls
+book/*.fdb_latexmk
+book/*.synctex.gz
+book/*.pdf
+
+# Local environment
+.env
+.env.local
+
+# Yanlışlıkla iç içe klonlanmış kopya
+/rest-api-book/

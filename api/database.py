@@ -1,14 +1,30 @@
 import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL")
 
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://admin:password@db:5432/university",
+)
+
+# SQLite (test ortamı) için ek connect_args gerekiyor.
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+
 Base = declarative_base()
 
+
 def get_db():
+    """FastAPI dependency: her istek için bir DB session açar ve kapatır."""
     db = SessionLocal()
     try:
         yield db
